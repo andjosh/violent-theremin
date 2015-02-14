@@ -4,11 +4,18 @@ var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 // create Oscillator and gain node
 var oscillator = audioCtx.createOscillator();
 var gainNode = audioCtx.createGain();
+var analyser = audioCtx.createAnalyser();
+var javascriptNode = audioCtx.createScriptProcessor(2048, 1, 1);
+analyser.smoothingTimeConstant = 0.3;
+analyser.fftSize = 1024;
+javascriptNode.connect(audioCtx.destination);
 
 // connect oscillator to gain node to speakers
 
 oscillator.connect(gainNode);
 gainNode.connect(audioCtx.destination);
+oscillator.connect(analyser);
+analyser.connect(javascriptNode);
 
 // create initial theremin frequency and volumn values
 
@@ -16,7 +23,7 @@ var WIDTH = window.innerWidth;
 var HEIGHT = window.innerHeight;
 
 var maxFreq = 6000;
-var maxVol = 0.02;
+var maxVol = 0.04;
 
 var initialFreq = 3000;
 var initialVol = 0.001;
@@ -86,27 +93,30 @@ canvas.width = WIDTH;
 canvas.height = HEIGHT; 
 
 var canvasCtx = canvas.getContext('2d');
+var gradient = canvasCtx.createLinearGradient(0,0,0,200);
+gradient.addColorStop(1,'#4F448C');
+gradient.addColorStop(0.5,'#B6A9D1');
+gradient.addColorStop(0,'#ffffff');
+canvasCtx.fillStyle = gradient;
 
 function canvasDraw() {
-  if(KeyFlag == true) {
-    rX = KeyX;
-    rY = KeyY;
-  } else {
-    rX = CurX;
-    rY = CurY;
-  }
-  rC = Math.floor((gainNode.gain.value/maxVol)*30);
-  
-  canvasCtx.globalAlpha = 0.2;
-  
-  for(i=1;i<=15;i=i+2) {
-    canvasCtx.beginPath();
-    canvasCtx.fillStyle = 'rgb(' + 100+(i*10) + ',' + Math.floor((gainNode.gain.value/maxVol)*255) + ',' + Math.floor((oscillator.frequency.value/maxFreq)*255) + ')';
-    canvasCtx.arc(rX+random(0,50),rY+random(0,50),rC/2+i,(Math.PI/180)*0,(Math.PI/180)*360,false);
-    canvasCtx.fill();
-    canvasCtx.closePath();     
-  }    
+      
 }
+
+javascriptNode.onaudioprocess = function() {
+    // get the average, bincount is fftsize / 2
+    var array =  new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(array);
+    canvasCtx.clearRect(0, 0, canvas.clientWidth + 10, canvas.clientHeight);
+    drawSpectrum(array);
+};
+
+function drawSpectrum(array) {
+    for ( var i = 0; i < (array.length); i++ ){
+        var value = array[i];
+        canvasCtx.fillRect(i*5,canvas.clientHeight-value,4,canvas.clientHeight);
+    }
+};
 
 // clear screen
 
